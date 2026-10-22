@@ -82,7 +82,8 @@ void GameWorld::step(QPointF direction, double seconds)
     // Sweeps prevent solid tunneling; short substeps also sample pickup/exit triggers.
     const int steps = std::max(1, int(std::ceil(std::max(std::abs(delta.x()), std::abs(delta.y())) / 3)));
     for (int i = 0; i < steps; ++i) {
-        m_position += slideMove(m_level, playerBounds(), delta / steps,
+        // Resample each <=3px step when entering water or leaving a boardwalk.
+        m_position += slideMove(m_level, playerBounds(), delta / steps * movementScale(surface()),
                                 m_hasKey ? QRectF() : m_level.exit);
         if (!m_hasKey && playerBounds().intersects(m_level.key)) {
             m_hasKey = true;

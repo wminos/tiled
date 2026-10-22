@@ -93,6 +93,8 @@ void GameView::drawBackground(QPainter *p, const QRectF &rect)
     p->save();
     p->setClipRect(m_level->data.bounds());
     drawLayer(p, QStringLiteral("Ground"), rect);
+    drawLayer(p, QStringLiteral("Water"), rect);
+    drawLayer(p, QStringLiteral("Boardwalk"), rect);
     drawLayer(p, QStringLiteral("Walls"), rect);
     p->restore();
 }
@@ -130,6 +132,12 @@ void GameView::drawForeground(QPainter *p, const QRectF &rect)
     p->setBrush(QColor(0, 0, 0, 100));
     p->drawEllipse(QRectF(player.x() - 10, player.y() - 3, 20, 6));
     p->setRenderHint(QPainter::Antialiasing, true);
+    if (m_world.surface() == Surface::Water) {
+        const qreal radius = 8 + (m_world.moving() ? 3 * std::sin(time * 12) : 0);
+        p->setBrush(Qt::NoBrush);
+        p->setPen(QPen(QColor(134, 209, 215, 155), 1));
+        p->drawEllipse(player, radius, radius * .4);
+    }
     if (m_world.pickupAge() < 0.65) {
         const qreal progress = m_world.pickupAge() / 0.65;
         p->setBrush(Qt::NoBrush);
@@ -196,7 +204,7 @@ void GameView::drawForeground(QPainter *p, const QRectF &rect)
         p->setFont(uiFont(14));
         p->setPen(QColor(QStringLiteral("#aec3ba")));
         p->drawText(QRectF(center.x() - 190, center.y() - 13, 380, 30), Qt::AlignCenter,
-                    won ? QStringLiteral("You found the key and opened the vault.")
+                    won ? QStringLiteral("Escaped in %1 s. Try a different route.").arg(m_world.elapsed(), 0, 'f', 1)
                         : QStringLiteral("Your way out will still be here."));
         p->setPen(Qt::NoPen);
         p->setBrush(QColor(QStringLiteral("#e7be78")));

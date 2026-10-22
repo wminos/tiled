@@ -174,7 +174,8 @@ void GameWindow::paintEvent(QPaintEvent *)
     p.fillRect(rect(), QColor(QStringLiteral("#101d24")));
     p.setPen(QColor(QStringLiteral("#ddbd83")));
     p.setFont(uiFont(11, true));
-    p.drawText(QRect(36, 24, 500, 20), QStringLiteral("A SMALL ADVENTURE  /  01"));
+    p.drawText(QRect(36, 24, 500, 20),
+               QStringLiteral("A SMALL ADVENTURE  /  %1 s").arg(m_world.elapsed(), 0, 'f', 1));
     p.setPen(QColor(QStringLiteral("#f3ebd7")));
     p.setFont(uiFont(31, true));
     p.drawText(QRect(34, 47, 450, 43), QStringLiteral("One Key Out"));
@@ -202,12 +203,19 @@ void GameWindow::paintEvent(QPaintEvent *)
     p.setFont(uiFont(13));
     p.setPen(QColor(QStringLiteral("#93aaa6")));
     QString hint = QStringLiteral("Find the golden key. Open the mint-lit gate.");
+    if (m_level && std::any_of(m_level->data.waterCorners.cbegin(), m_level->data.waterCorners.cend(),
+                               [](int mask) { return mask != 0; }))
+        hint = QStringLiteral("Find the key. Wade through water or follow the dry boardwalks.");
     if (m_world.hasKey())
         hint = QStringLiteral("Key found. The gate is open — find your way out.");
     else if (m_world.nearExit())
         hint = QStringLiteral("The gate is sealed. Find the golden key first.");
+    if (m_world.surface() == Surface::Water)
+        hint = QStringLiteral("WADING  /  55% speed. Dry boardwalks let you move at full speed.");
+    else if (m_world.surface() == Surface::Boardwalk)
+        hint = QStringLiteral("DRY BOARDWALK  /  Full speed. Choose your route to the key and gate.");
     if (m_world.state() == GameWorld::State::Won)
-        hint = QStringLiteral("A little courage. A little key. A way out.");
+        hint = QStringLiteral("Escaped in %1 s. Restart and try another route.").arg(m_world.elapsed(), 0, 'f', 1);
     p.drawText(QRect(36, height() - 49, width() - 70, 24), hint);
     p.setFont(uiFont(12));
     p.setPen(QColor(QStringLiteral("#c6d3c5")));

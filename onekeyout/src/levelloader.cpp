@@ -40,6 +40,8 @@ std::unique_ptr<LoadedLevel> loadLevel(const QString &path, QString &error)
     data.width = map->width();
     data.height = map->height();
     data.walls.fill(false, data.width * data.height);
+    data.waterCorners.fill(0, data.width * data.height);
+    data.boardwalkEdges.fill(-1, data.width * data.height);
     data.title = map->property(QStringLiteral("title")).toString();
     if (data.title.isEmpty())
         data.title = QStringLiteral("THE LANTERN VAULT");
@@ -50,6 +52,7 @@ std::unique_ptr<LoadedLevel> loadLevel(const QString &path, QString &error)
         if (layerNames.contains(name) ||
             (name != QStringLiteral("Ground") && name != QStringLiteral("Walls") &&
              name != QStringLiteral("Objects") && name != QStringLiteral("Props") &&
+             name != QStringLiteral("Water") && name != QStringLiteral("Boardwalk") &&
              name != QStringLiteral("Foreground")))
             return fail(QStringLiteral("Unknown or duplicate layer: ") + name);
         layerNames.insert(name);
@@ -96,6 +99,18 @@ std::unique_ptr<LoadedLevel> loadLevel(const QString &path, QString &error)
                         return fail(QStringLiteral("Tile ID outside the tileset in ") + name);
                     if (name == QStringLiteral("Walls"))
                         data.walls[y * data.width + x] = !cell.isEmpty();
+                    if ((name == QStringLiteral("Water") || name == QStringLiteral("Boardwalk")) && !cell.isEmpty()) {
+                        const auto *tile = cell.tile();
+                        const bool water = name == QStringLiteral("Water");
+                        const auto property = water ? QStringLiteral("waterCorners") : QStringLiteral("boardwalkEdges");
+                        const auto value = tile->property(property);
+                        if (cell.flags() != 0 || tile->offset() != QPoint() || tile->isAnimated() ||
+                            layer->effectiveTintColor() != QColor(Qt::white) ||
+                            value.metaType().id() != QMetaType::Int || value.toInt() < 0 || value.toInt() > 15)
+                            return fail(name + QStringLiteral(" needs static, untransformed tiles with integer ") +
+                                        property + QStringLiteral(" from 0 to 15 and no tint or offset."));
+                        (water ? data.waterCorners : data.boardwalkEdges)[y * data.width + x] = value.toInt();
+                    }
                     if (name == QStringLiteral("Props") && !cell.isEmpty()) {
                         const auto *tile = cell.tile();
                         if (cell.flags() != 0 || tile->offset() != QPoint() || tile->isAnimated() ||

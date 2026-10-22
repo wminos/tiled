@@ -4,6 +4,7 @@
 #include "collision.h"
 #include "levelloader.h"
 #include "tilelayer.h"
+#include "wangset.h"
 #include <QtTest>
 #include <QDir>
 #include <QQueue>
@@ -143,6 +144,8 @@ private slots:
         QCOMPARE(disk->data.key, embedded->data.key);
         QCOMPARE(disk->data.exit, embedded->data.exit);
         QCOMPARE(disk->data.propColliders, embedded->data.propColliders);
+        QCOMPARE(disk->data.waterCorners, embedded->data.waterCorners);
+        QCOMPARE(disk->data.boardwalkEdges, embedded->data.boardwalkEdges);
         QCOMPARE(disk->props.size(), 8);
         QCOMPARE(disk->props.size(), embedded->props.size());
         QCOMPARE(disk->data.propColliders.size(), 8);
@@ -488,6 +491,182 @@ private slots:
         QTest::keyClick(&window, Qt::Key_R);
         QVERIFY(!window.world().hasKey());
         QCOMPARE(window.world().position(), start);
+    }
+
+    void terrainArtMatchesGameplayFootprint()
+    {
+        QString error;
+        auto level = loadLevel(QStringLiteral(":/onekeyout/assets/maps/first-room.tmx"), error);
+        QVERIFY2(level, qPrintable(error));
+        LevelData probe;
+        probe.width = probe.height = 1;
+        probe.walls = {false};
+        int checked = 0;
+        for (const auto &tileset : level->map->tilesets()) {
+            const bool water = tileset->name() == "water";
+            if (!water && tileset->name() != "boardwalk")
+                continue;
+            QCOMPARE(tileset->tileCount(), 16);
+            QCOMPARE(tileset->wangSets().size(), 1);
+            const auto *wang = tileset->wangSets().first();
+            QSet<int> masks;
+            for (const auto *tile : tileset->tiles()) {
+                const int mask = tile->property(water ? "waterCorners" : "boardwalkEdges").toInt();
+                masks.insert(mask);
+                // No dependence on atlas order: explicit properties must match Wang labels.
+                const auto id = wang->wangIdOfTile(tile);
+                for (int bit = 0; bit < 4; ++bit) {
+                    QCOMPARE(id.indexColor(bit * 2 + (water ? 1 : 0)), (mask >> bit) & 1);
+                    QCOMPARE(id.indexColor(bit * 2 + (water ? 0 : 1)), 0);
+                }
+                probe.waterCorners = {water ? mask : 15};
+                probe.boardwalkEdges = {water ? -1 : mask};
+                const QImage pixels = tile->image().copy(tile->imageRect()).toImage();
+                for (int y = 0; y < 32; ++y)
+                    for (int x = 0; x < 32; ++x) {
+                        const auto surface = surfaceAt(probe, {x + .5, y + .5});
+                        const bool covered = surface == (water ? Surface::Water : Surface::Boardwalk);
+                        QCOMPARE(covered, pixels.pixelColor(x, y).alpha() != 0);
+                    }
+                ++checked;
+            }
+            QCOMPARE(masks.size(), 16);
+        }
+        QCOMPARE(checked, 32);
+    }
+
+    void authoredWangConnectionsHaveNoSeams()
+    {
+        QString error;
+        auto level = loadLevel(QStringLiteral(":/onekeyout/assets/maps/first-room.tmx"), error);
+        QVERIFY2(level, qPrintable(error));
+        int checkedLayers = 0;
+        for (auto *layer : level->map->layers()) {
+            const bool water = layer->name() == "Water";
+            if (!water && layer->name() != "Boardwalk")
+                continue;
+            const auto *tiles = layer->asTileLayer();
+            QVERIFY(tiles);
+            const auto at = [&](int x, int y) {
+                if (x < 0 || y < 0 || x >= level->data.width || y >= level->data.height)
+                    return Tiled::WangId();
+                const auto cell = tiles->cellAt(x, y);
+                return cell.isEmpty() ? Tiled::WangId() : cell.tileset()->wangSets().first()->wangIdOfCell(cell);
+            };
+            int occupied = 0;
+            QSet<quint64> patterns;
+            for (int y = -1; y < level->data.height; ++y)
+                for (int x = -1; x < level->data.width; ++x) {
+                    const auto here = at(x, y), right = at(x+1, y), below = at(x, y+1);
+                    if (!here.isEmpty()) { ++occupied; patterns.insert(here); }
+                    if (water) {
+                        QCOMPARE(here.indexColor(1), right.indexColor(7));
+                        QCOMPARE(here.indexColor(3), right.indexColor(5));
+                        QCOMPARE(here.indexColor(3), below.indexColor(1));
+                        QCOMPARE(here.indexColor(5), below.indexColor(7));
+                    } else {
+                        QCOMPARE(here.indexColor(2), right.indexColor(6));
+                        QCOMPARE(here.indexColor(4), below.indexColor(0));
+                    }
+                }
+            QVERIFY(occupied >= 30);
+            QVERIFY(patterns.size() >= 6); // Edges, corners and interior, not one repeated tile.
+            ++checkedLayers;
+        }
+        QCOMPARE(checkedLayers, 2);
+    }
+
+    void waterMovementBoardwalkAndPause()
+    {
+        auto data = simpleLevel();
+        data.waterCorners.fill(15, data.width * data.height);
+        data.boardwalkEdges.fill(-1, data.width * data.height);
+        GameWorld world;
+        world.reset(data);
+        QCOMPARE(world.surface(), Surface::Water);
+        world.step({1, 0}, .1);
+        QVERIFY(qAbs(world.position().x() - (data.spawn.x() + 14.4 * .55)) < .00001);
+        world.pause();
+        const auto paused = world.position();
+        const auto elapsed = world.elapsed();
+        world.step({1, 0}, .1);
+        QCOMPARE(world.position(), paused);
+        QCOMPARE(world.elapsed(), elapsed);
+        data.boardwalkEdges.fill(10); // Continuous east-west boardwalk.
+        world.reset(data);
+        QCOMPARE(world.surface(), Surface::Boardwalk);
+        world.step({1, 0}, .1);
+        QVERIFY(qAbs(world.position().x() - (data.spawn.x() + 14.4)) < .00001);
+        QCOMPARE(surfaceAt(data, {80, 72}), Surface::Water); // Outside its visible width.
+        QCOMPARE(surfaceAt(data, {80, 73}), Surface::Boardwalk);
+        QCOMPARE(surfaceAt(data, {80, 87}), Surface::Water);
+        world.restart();
+        QCOMPARE(world.elapsed(), 0.0);
+        QCOMPARE(world.surface(), Surface::Boardwalk);
+    }
+
+    void rejectsInvalidSurfaceMetadata_data()
+    {
+        QTest::addColumn<QByteArray>("from");
+        QTest::addColumn<QByteArray>("to");
+        QTest::newRow("missing-mask") << QByteArray("name=\"waterCorners\"") << QByteArray("name=\"unknown\"");
+        QTest::newRow("negative-mask") << QByteArray("value=\"15\"") << QByteArray("value=\"-1\"");
+        QTest::newRow("large-mask") << QByteArray("value=\"15\"") << QByteArray("value=\"16\"");
+        QTest::newRow("fractional-mask") << QByteArray("type=\"int\" value=\"15\"") << QByteArray("type=\"float\" value=\"1.5\"");
+    }
+
+    void rejectsInvalidSurfaceMetadata()
+    {
+        QFETCH(QByteArray, from);
+        QFETCH(QByteArray, to);
+        const QString root = QFileInfo(QFINDTESTDATA("../assets/maps/first-room.tmx")).absolutePath();
+        const QString tiles = QDir(root).absoluteFilePath("../tilesets/");
+        QFile source(tiles + "water.tsx");
+        QVERIFY(source.open(QIODevice::ReadOnly));
+        QByteArray tsx = source.readAll();
+        QVERIFY(tsx.contains(from));
+        tsx.replace(from, to);
+        tsx.replace("source=\"image-", ("source=\"" + tiles + "image-").toUtf8());
+        QTemporaryDir directory;
+        QFile output(directory.filePath("water.tsx"));
+        QVERIFY(output.open(QIODevice::WriteOnly));
+        QCOMPARE(output.write(tsx), qint64(tsx.size()));
+        output.close();
+        QFile mapSource(root + "/first-room.tmx");
+        QVERIFY(mapSource.open(QIODevice::ReadOnly));
+        auto tmx = mapSource.readAll();
+        tmx.replace("../tilesets/water.tsx", output.fileName().toUtf8());
+        tmx.replace("../tilesets/", tiles.toUtf8());
+        QFile map(directory.filePath("invalid.tmx"));
+        QVERIFY(map.open(QIODevice::WriteOnly));
+        QCOMPARE(map.write(tmx), qint64(tmx.size()));
+        map.close();
+        QString error;
+        QVERIFY(!loadLevel(map.fileName(), error));
+        QVERIFY2(error.contains("Water needs"), qPrintable(error));
+    }
+
+    void floodedVaultKeyboardRoute()
+    {
+        GameWindow window;
+        window.setAutomaticUpdates(false);
+        QString error;
+        QVERIFY2(window.load(QStringLiteral(":/onekeyout/assets/maps/first-room.tmx"), error), qPrintable(error));
+        window.show();
+        QCoreApplication::processEvents();
+        QTest::keyClick(&window, Qt::Key_R);
+        capture(window, "08-flooded-start");
+        walkTo(window, {208, 176});
+        QCOMPARE(window.world().surface(), Surface::Water);
+        capture(window, "09-wading");
+        walkTo(window, {304, 400});
+        QCOMPARE(window.world().surface(), Surface::Boardwalk);
+        capture(window, "10-boardwalk");
+        walkTo(window, window.world().level().key.center());
+        QVERIFY(window.world().hasKey());
+        walkTo(window, window.world().level().exit.center());
+        QCOMPARE(window.world().state(), GameWorld::State::Won);
+        capture(window, "11-flooded-complete");
     }
 };
 

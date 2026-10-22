@@ -12,7 +12,10 @@ Widgets. The upstream editor and its export plugins are not linked into the game
   The packaging script uses the Qt installation selected by the build environment.
 
 The dungeon tiles and actor sprites are original pixel art authored for this
-game using `tools/create-assets.py`; no external game assets were imported.
+game using `tools/create-assets.py`. The water and boardwalk atlases are original
+art from `tools/create-terrain-art.py`, imported into native Tiled terrain sets
+through tiled-ai. No external game assets were imported. Both recipes refuse to
+overwrite existing art. See `TERRAIN.md` for the terrain authoring contract.
 The UI requests the system-installed Avenir Next font, with Qt's platform font
 fallback. No font files are distributed.
 

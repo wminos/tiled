@@ -1,0 +1,23 @@
+{
+  "map": "assets/maps/first-room.tmx",
+  "tileSize": 32,
+  "preservedLayers": ["Ground", "Objects", "Props"],
+  "openWallCells": [[7, 4], [7, 5], [15, 11], [15, 12], [15, 13]],
+  "water": {
+    "tileset": "assets/tilesets/water.tsx", "terrain": "Shallow water", "color": "Water",
+    "brushes": [
+      {"region": [4, 3, 8, 4]},
+      {"region": [9, 10, 11, 4]},
+      {"region": [17, 4, 5, 4], "exclude": [[20, 4, 2, 2]]}
+    ]
+  },
+  "boardwalk": {
+    "tileset": "assets/tilesets/boardwalk.tsx", "terrain": "Dry boardwalk", "color": "Boardwalk",
+    "segments": [
+      [[5, 2], [5, 4]], [[5, 4], [10, 4]], [[10, 4], [10, 6]], [[8, 4], [8, 6]],
+      [[9, 10], [9, 12]], [[9, 10], [13, 10]], [[13, 10], [13, 13]],
+      [[13, 13], [18, 13]], [[18, 11], [18, 13]], [[9, 12], [11, 12]],
+      [[18, 3], [18, 7]], [[18, 7], [20, 7]]
+    ]
+  }
+}

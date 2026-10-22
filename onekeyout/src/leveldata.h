@@ -13,6 +13,9 @@ struct LevelData {
     int tileSize = 32;
     QVector<bool> walls;
     QVector<QRectF> propColliders;
+    // Explicit gameplay masks, independent of tile IDs and editor Wang metadata.
+    QVector<int> waterCorners;    // TR, BR, BL, TL bits; empty means all dry.
+    QVector<int> boardwalkEdges;  // N, E, S, W bits; -1 means no boardwalk.
     QPointF spawn;
     QRectF key;
     QRectF exit;

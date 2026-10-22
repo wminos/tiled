@@ -4,5 +4,9 @@
     <file>assets/tilesets/dungeon.tsx</file>
     <file>assets/images/dungeon.png</file>
     <file>assets/images/actors.png</file>
+    <file>assets/tilesets/water.tsx</file>
+    <file>assets/tilesets/image-7157fc59bee3c2ad9d9e9cd0a8c6f7650f4ea925227b842bc5a2743711968bcc.png</file>
+    <file>assets/tilesets/boardwalk.tsx</file>
+    <file>assets/tilesets/image-0f019e5f3149320156eac7b28167bed846df2e0654e62f5786600f0f7845511b.png</file>
   </qresource>
 </RCC>

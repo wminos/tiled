@@ -1,6 +1,7 @@
 #pragma once
 
 #include "leveldata.h"
+#include "surface.h"
 
 namespace OneKeyOut {
 
@@ -28,6 +29,7 @@ public:
     bool hasKey() const { return m_hasKey; }
     bool moving() const { return m_moving; }
     bool nearExit() const;
+    Surface surface() const { return surfaceAt(m_level, m_position); }
     double elapsed() const { return m_elapsed; }
     double pickupAge() const { return m_pickupAge; }
 
