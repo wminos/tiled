@@ -33,6 +33,9 @@ def main():
     common = ["-f", str(ROOT / "workspace.qbs"), "-d", str(BUILD)]
     subprocess.run(["qbs", "build", *common, "--no-install", "-p", products, "-j", "4", "config:debug"],
                    cwd=ROOT, check=True)
+    # Keep clangd's Qt/framework paths and defines aligned with the actual build.
+    subprocess.run(["qbs", "generate", "-g", "clangdb", *common, "config:debug"],
+                   cwd=ROOT, check=True)
     if mode == "build-only":
         return 0
     if mode == "package":

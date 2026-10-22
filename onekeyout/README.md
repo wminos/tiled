@@ -55,6 +55,24 @@ brew install qbs qttools
 테스트 타깃을 빌드하고, 최대 45초 동안 offscreen Qt 검사를 실행합니다.
 검사 화면은 `build/evidence/`에 생성합니다.
 
+## VS Code 코드 분석
+
+VS Code에서 Tiled 저장소 루트 또는 `onekeyout/`을 열고 clangd 확장을 사용합니다.
+처음 체크아웃했거나 `build/`를 지웠다면 `./onekeyout/run.sh --build-only`를 실행합니다.
+테스트 코드를 편집할 때는 `./onekeyout/run.sh --check`로 테스트의 Qt 생성 헤더도 준비합니다.
+`run.sh`는 매 빌드 후 Qbs의 실제 컴파일 옵션으로
+`onekeyout/build/debug/compile_commands.json`을 생성·갱신합니다.
+`onekeyout/.clangd`가 이 파일을 가리키므로 Qt 헤더·프레임워크 경로, C++17,
+전처리 정의와 생성 헤더 경로를 같은 빌드 설정에서 가져옵니다.
+Qt 설치 경로를 편집기 설정에 직접 적을 필요는 없습니다.
+
+열려 있던 파일에 이전 진단이 남으면 명령 팔레트에서 **clangd: Restart language server**를
+한 번 실행합니다. 설정은 `onekeyout/` 아래 코드에 적용되며 원본 Tiled의 IDE 설정은
+수정하지 않습니다. 생성한 컴파일 데이터베이스는 `build/` 안에 두고 Git에서 제외합니다.
+
+참고: [Qbs clangdb 생성](https://doc.qt.io/qbs/generators.html#generating-clang-compilation-databases),
+[clangd 프로젝트 설정](https://clangd.llvm.org/config.html#compilationdatabase).
+
 ## Tiled에서 편집
 
 `onekeyout.tiled-project`를 열고 `assets/maps/first-room.tmx`를 편집합니다.
