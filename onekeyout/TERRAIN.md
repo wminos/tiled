@@ -19,8 +19,7 @@
 Tiled의 Terrain Sets가 Wang 정보를 보관하고 Terrain Brush가 autotiling을 수행합니다.
 Wang과 autotile은 별개의 두 런타임 기능이 아니라, 연결 규칙과 그 규칙을 사용하는
 편집 동작입니다. [공식 Terrain 문서](https://doc.mapeditor.org/en/stable/manual/terrain/)의
-Corner/Edge 방식을 사용합니다. 물·보행로는 이 방식을 유지하며, 별도 동굴 방의 두 칸 높이
-암벽은 [AUTOMAPPING.md](AUTOMAPPING.md)의 native Automapping 규칙으로 구성합니다.
+Corner/Edge 방식을 사용합니다. 규칙 맵으로 레이어를 변환하는 Automapping은 이번 범위에 없습니다.
 
 | 대상 | 편집 규칙 | 런타임 속성 | 연결 순서 |
 | --- | --- | --- | --- |

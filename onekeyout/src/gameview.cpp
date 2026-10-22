@@ -95,8 +95,7 @@ void GameView::drawBackground(QPainter *p, const QRectF &rect)
     drawLayer(p, QStringLiteral("Ground"), rect);
     drawLayer(p, QStringLiteral("Water"), rect);
     drawLayer(p, QStringLiteral("Boardwalk"), rect);
-    if (m_level->caveSprites.isEmpty())
-        drawLayer(p, QStringLiteral("Walls"), rect);
+    drawLayer(p, QStringLiteral("Walls"), rect);
     p->restore();
 }
 
@@ -157,29 +156,22 @@ void GameView::drawForeground(QPainter *p, const QRectF &rect)
     if (m_world.facing().y() < -0.4)
         playerFrame = m_world.moving() ? 4 : 3;
 
-    enum Kind { Cave, Prop, Gate, Key, Player };
+    enum Kind { Prop, Gate, Key, Player };
     struct Item { qreal groundY; Kind kind; int index = 0; };
     QVector<Item> items;
-    items.reserve(m_level->caveSprites.size() + m_level->props.size() + 3);
-    for (int i = 0; i < m_level->caveSprites.size(); ++i)
-        items.append({m_level->caveSprites[i].groundY, Cave, i});
+    items.reserve(m_level->props.size() + 3);
     for (int i = 0; i < m_level->props.size(); ++i)
         items.append({m_level->props[i].groundY, Prop, i});
     items.append({exit.y(), Gate});
     if (!m_world.hasKey())
         items.append({key.y(), Key});
     items.append({player.y(), Player});
-    // Stable ties: cave pieces, authored props, gate, key, then player.
+    // Stable ties: authored props, gate, key, then player. No animation jitter.
     std::stable_sort(items.begin(), items.end(), [](const Item &a, const Item &b) {
         return a.groundY < b.groundY;
     });
     for (const auto &item : items) {
         switch (item.kind) {
-        case Cave: {
-            const auto &wall = m_level->caveSprites[item.index];
-            p->drawPixmap(wall.topLeft, wall.image);
-            break;
-        }
         case Prop: {
             const auto &prop = m_level->props[item.index];
             p->drawPixmap(prop.topLeft, prop.image);

@@ -1,8 +1,7 @@
 # One Key Out
 
 작은 금고에서 황금 열쇠를 찾아 출구로 나가는 macOS 탑다운 게임입니다.
-두 칸 높이의 암벽이 있는 동굴에서 젖은 지름길과 마른 보행로를 골라 탈출합니다.
-벽의 상단·정면·안팎 모서리는 실제 Tiled Automapping으로 구성합니다.
+물이 스민 금고에서 젖은 지름길과 마른 보행로를 골라 열쇠를 찾고 탈출합니다.
 이동, 벽·사물 충돌, 열쇠 획득, 클리어 시간, 일시정지와 재시작까지 플레이할 수 있습니다.
 현재 버전에는 적, 사운드, 세이브가 없습니다.
 
@@ -16,7 +15,6 @@ Tiled 저장소 루트에서 실행합니다.
 ./onekeyout/run.sh
 ./onekeyout/run.sh --build-only
 ./onekeyout/run.sh --check
-./onekeyout/run.sh --automap
 ./onekeyout/run.sh --package
 ```
 
@@ -54,9 +52,8 @@ brew install qbs qttools
 것을 사용하며, 별도 복사본이나 패치를 만들지 않습니다.
 
 개발 빌드는 `build/debug/bin/One Key Out.app`에 생성됩니다. 이 앱은 Qbs 개발 환경의
-라이브러리 경로를 사용하므로 개발 중에는 `run.sh`로 실행합니다. `--check`는 게임,
-게임 테스트, native Automapping 검사 도구를 빌드하고 각각 최대 45초 동안 검사합니다.
-Automapping 도구의 첫 빌드에는 Tiled 편집기 라이브러리도 필요합니다.
+라이브러리 경로를 사용하므로 개발 중에는 `run.sh`로 실행합니다. `--check`는 게임과
+테스트 타깃을 빌드하고, 최대 45초 동안 offscreen Qt 검사를 실행합니다.
 검사 화면은 `build/evidence/`에 생성합니다.
 
 ## VS Code 코드 분석
@@ -92,10 +89,7 @@ Git에서 제외합니다.
 
 ## Tiled에서 편집
 
-`onekeyout.tiled-project`를 열고 `assets/maps/cave-vault.tmx`를 편집합니다.
-동굴벽은 `CaveShape`를 수정하고 **Map > AutoMap**으로 재생성합니다.
-입력 레이어·두 칸 높이·충돌·정렬 규약은 [AUTOMAPPING.md](AUTOMAPPING.md)에 있습니다.
-기존 Wang terrain 방은 `assets/maps/first-room.tmx`로 계속 실행할 수 있습니다.
+`onekeyout.tiled-project`를 열고 `assets/maps/first-room.tmx`를 편집합니다.
 프로젝트의 **Play One Key Out** 명령은 현재 맵을 저장한 뒤 게임으로 실행합니다.
 터미널의 기본 `run.sh`도 이 디스크 맵을 읽으므로 편집 후 다시 실행하면 반영됩니다.
 배포 앱의 기본 맵은 빌드에 포함된 Qt 리소스입니다.
@@ -107,8 +101,6 @@ Git에서 제외합니다.
 | Water | 선택 사항. Corner Wang으로 연결하는 얕은 물. 발이 물에 닿으면 이동 속도 55% |
 | Boardwalk | 선택 사항. Edge Wang으로 연결하는 마른 보행로. 보행로 폭 안에서는 정상 속도 |
 | Walls | 타일이 있는 모든 칸이 벽인 타일 레이어 |
-| CaveShape | caveHeight=2 맵의 제작용 암벽 영역. 위쪽 두 줄은 비워 두며 충돌·벽면 생성의 입력 |
-| CaveRoof / CaveUpper / CaveLower | Automapping이 생성하는 상단 암반과 두 줄 벽면. 지면 Y로 정렬 |
 | Props | 선택 사항. 발 위치의 Y 좌표로 캐릭터와 함께 정렬하는 화분·등불 등의 타일 레이어 |
 | Objects | 아래 세 클래스의 오브젝트를 하나씩 배치 |
 | Foreground | 선택 사항. 천장·덮개처럼 항상 캐릭터보다 앞에 그리는 타일 레이어 |
@@ -118,7 +110,6 @@ Git에서 제외합니다.
 | title | 선택 사항. 맵의 문자열 속성, 화면 하단 방 이름 |
 
 레이어는 최상위에 두고 표시 상태, 불투명도 1, 위치·오프셋 0을 유지합니다.
-동굴 맵의 `CaveShape`와 `Walls`는 숨김 상태를 허용합니다.
 그룹·이미지 레이어, 무한 맵, 회전 오브젝트, tile object는 지원하지 않습니다.
 타일셋은 32 px 타일의 atlas 이미지 형식입니다. 런타임 타일 애니메이션은 구현하지 않았습니다.
 통로는 셀 단위로 연결하며, 스폰·열쇠·출구는 벽과 겹치지 않는 셀 중심에 놓는 것을 권장합니다.

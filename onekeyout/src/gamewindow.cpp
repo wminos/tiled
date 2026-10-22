@@ -23,7 +23,7 @@ GameWindow::GameWindow(QWidget *parent)
 {
     setWindowTitle(QStringLiteral("One Key Out"));
     setMinimumSize(832, 700);
-    resize(960, 824); // Includes two extra map rows without shrinking 32 px tiles.
+    resize(960, 760);
     setFocusPolicy(Qt::StrongFocus);
     connect(&m_timer, &QTimer::timeout, this, &GameWindow::tick);
     m_timer.setTimerType(Qt::PreciseTimer);
