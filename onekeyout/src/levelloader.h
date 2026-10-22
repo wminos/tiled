@@ -17,6 +17,7 @@ struct LoadedLevel {
     std::unique_ptr<Tiled::Map> map;
     LevelData data;
     QVector<PropSprite> props;
+    QVector<PropSprite> caveSprites; // Projected art; no additional collision footprint.
 };
 
 // libtiled owns format decoding; this adapter validates the game's supported subset.

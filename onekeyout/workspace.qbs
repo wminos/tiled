@@ -1,4 +1,4 @@
 Project {
     name: "OneKeyOutWorkspace"
-    references: ["../tiled.qbs", "onekeyout.qbs", "tests/tests.qbs"]
+    references: ["../tiled.qbs", "onekeyout.qbs", "tests/tests.qbs", "tools/automap.qbs"]
 }

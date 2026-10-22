@@ -1,0 +1,4 @@
+# Native Tiled Automapping; order is significant.
+00-clear.tmx
+10-rock.tmx
+20-faces.tmx

@@ -3,6 +3,7 @@
 #include "gameworld.h"
 #include "collision.h"
 #include "levelloader.h"
+#include "mapwriter.h"
 #include "tilelayer.h"
 #include "wangset.h"
 #include <QtTest>
@@ -667,6 +668,128 @@ private slots:
         walkTo(window, window.world().level().exit.center());
         QCOMPARE(window.world().state(), GameWorld::State::Won);
         capture(window, "11-flooded-complete");
+    }
+
+    void caveProjectionKeepsGroundCollision()
+    {
+        QString error;
+        auto cave = loadLevel(QFINDTESTDATA("../assets/maps/cave-vault.tmx"), error);
+        QVERIFY2(cave, qPrintable(error));
+        auto old = loadLevel(QStringLiteral(":/onekeyout/assets/maps/first-room.tmx"), error);
+        QVERIFY2(old, qPrintable(error));
+        auto embedded = loadLevel(QStringLiteral(":/onekeyout/assets/maps/cave-vault.tmx"), error);
+        QVERIFY2(embedded, qPrintable(error));
+        QCOMPARE(cave->data.walls, embedded->data.walls);
+        QCOMPARE(cave->caveSprites.size(), embedded->caveSprites.size());
+        QVERIFY(cave->caveSprites.size() > 100);
+        QCOMPARE(cave->data.spawn, old->data.spawn + QPointF(0,64));
+        QCOMPARE(cave->data.key, old->data.key.translated(0,64));
+        QCOMPARE(cave->data.exit, old->data.exit.translated(0,64));
+        for (int y=0; y<old->data.height; ++y) {
+            for (int x=0; x<old->data.width; ++x) {
+                const int a=y*24+x, b=(y+2)*24+x;
+                QCOMPARE(cave->data.walls[b], old->data.walls[a]);
+                QCOMPARE(cave->data.waterCorners[b], old->data.waterCorners[a]);
+                QCOMPARE(cave->data.boardwalkEdges[b], old->data.boardwalkEdges[a]);
+            }
+        }
+        for (int i=0; i<old->data.propColliders.size(); ++i)
+            QCOMPARE(cave->data.propColliders[i],old->data.propColliders[i].translated(0,64));
+        // A front face consists of two separate tile images with one shared ground anchor.
+        const QPointF upperPosition(9*32,8*32), lowerPosition(9*32,9*32);
+        int found=0;
+        for (const auto &part : cave->caveSprites) {
+            if (part.topLeft == upperPosition || part.topLeft == lowerPosition) {
+                QCOMPARE(part.groundY, 320.0);
+                QCOMPARE(part.image.size(), QSize(32,32));
+                ++found;
+            }
+        }
+        QCOMPARE(found,2);
+        // Standing behind the projected face is legal; walking into its base is not.
+        QVERIFY(hasTerrainClearance(cave->data,GameWorld::footprintAt({304,272})));
+        QVERIFY(!hasTerrainClearance(cave->data,GameWorld::footprintAt({304,304})));
+        QCOMPARE(slideMove(cave->data,GameWorld::footprintAt({304,336}),{0,-64}),QPointF(0,-11));
+    }
+
+    void cavePartsShareDepthAnchor()
+    {
+        QString error;
+        auto level=loadLevel(fixture(),error);
+        QVERIFY2(level,qPrintable(error));
+        level->props.clear();
+        const QColor marker(230,30,190);
+        QPixmap part(32,32); part.fill(marker);
+        level->caveSprites={{part,{64,0},96},{part,{64,32},96},{part,{64,64},96}};
+        GameWorld world;
+        RenderProbe view(world);
+        view.setLevel(level.get());
+        const auto render=[&](qreal y) {
+            auto data=level->data; data.spawn={80,y}; world.reset(data);
+            return view.renderWorld();
+        };
+        QCOMPARE(render(62).pixelColor(80,45),marker); // Upper wall hides player behind it.
+        QCOMPARE(render(94).pixelColor(80,77),marker);
+        QVERIFY(render(98).pixelColor(80,77)!=marker); // Player in front covers lower wall.
+        QVERIFY(render(96).pixelColor(80,77)!=marker); // Stable tie across all parts.
+    }
+
+    void rejectsStaleCaveOutput_data()
+    {
+        QTest::addColumn<QString>("changed");
+        QTest::newRow("missing-face") << QString("CaveUpper");
+        QTest::newRow("stale-collision") << QString("Walls");
+        QTest::newRow("edited-source") << QString("CaveShape");
+    }
+
+    void rejectsStaleCaveOutput()
+    {
+        QFETCH(QString,changed);
+        QString error;
+        auto level=loadLevel(QFINDTESTDATA("../assets/maps/cave-vault.tmx"),error);
+        QVERIFY2(level,qPrintable(error));
+        bool edited=false;
+        for (auto *base : level->map->layers()) {
+            if (base->name()!=changed) continue;
+            auto *tiles=base->asTileLayer();
+            for (int y=0;y<tiles->height() && !edited;++y)
+                for (int x=0;x<tiles->width() && !edited;++x)
+                    if (!tiles->cellAt(x,y).isEmpty()) {
+                        tiles->setCell(x,y,Tiled::Cell()); edited=true;
+                    }
+        }
+        QVERIFY(edited);
+        QTemporaryDir directory;
+        const auto path=directory.filePath("cave-stale.tmx");
+        QVERIFY(Tiled::MapWriter().writeMap(level->map.get(),path));
+        QVERIFY(!loadLevel(path,error));
+        QVERIFY2(error.contains("Stale cave output"),qPrintable(error));
+    }
+
+    void caveKeyboardRoute()
+    {
+        GameWindow window;
+        window.setAutomaticUpdates(false);
+        QString error;
+        QVERIFY2(window.load(QStringLiteral(":/onekeyout/assets/maps/cave-vault.tmx"),error),qPrintable(error));
+        window.resize(1000,850);
+        window.show();
+        QCoreApplication::processEvents();
+        capture(window,"12-cave-start");
+        walkTo(window,{304,272}); // Walk behind a two-tile wall without an extra collider.
+        capture(window,"13-cave-behind-wall");
+        walkTo(window,{400,304}); // Opening between the wall ends.
+        capture(window,"14-cave-doorway");
+        walkTo(window,{208,240});
+        QCOMPARE(window.world().surface(),Surface::Water);
+        walkTo(window,{304,464});
+        QCOMPARE(window.world().surface(),Surface::Boardwalk);
+        capture(window,"15-cave-front");
+        walkTo(window,window.world().level().key.center());
+        QVERIFY(window.world().hasKey());
+        walkTo(window,window.world().level().exit.center());
+        QCOMPARE(window.world().state(),GameWorld::State::Won);
+        capture(window,"16-cave-complete");
     }
 };
 

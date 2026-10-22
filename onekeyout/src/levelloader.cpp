@@ -37,6 +37,11 @@ std::unique_ptr<LoadedLevel> loadLevel(const QString &path, QString &error)
 
     LevelData data;
     QVector<PropSprite> props;
+    QVector<PropSprite> caveSprites;
+    const auto caveHeight = map->property(QStringLiteral("caveHeight"));
+    const bool cave = caveHeight.isValid();
+    if (cave && (caveHeight.metaType().id() != QMetaType::Int || caveHeight.toInt() != 2))
+        return fail(QStringLiteral("caveHeight must be the integer 2."));
     data.width = map->width();
     data.height = map->height();
     data.walls.fill(false, data.width * data.height);
@@ -49,15 +54,18 @@ std::unique_ptr<LoadedLevel> loadLevel(const QString &path, QString &error)
     QSet<QString> objects;
     for (auto *layer : map->layers()) {
         const QString name = layer->name();
+        const bool caveArt = cave && (name == QStringLiteral("CaveRoof") ||
+            name == QStringLiteral("CaveUpper") || name == QStringLiteral("CaveLower"));
+        const bool caveMask = cave && (name == QStringLiteral("CaveShape") || name == QStringLiteral("Walls"));
         if (layerNames.contains(name) ||
             (name != QStringLiteral("Ground") && name != QStringLiteral("Walls") &&
              name != QStringLiteral("Objects") && name != QStringLiteral("Props") &&
              name != QStringLiteral("Water") && name != QStringLiteral("Boardwalk") &&
-             name != QStringLiteral("Foreground")))
+             name != QStringLiteral("Foreground") && !caveArt && !caveMask))
             return fail(QStringLiteral("Unknown or duplicate layer: ") + name);
         layerNames.insert(name);
         if (layer->offset() != QPointF() || layer->x() != 0 || layer->y() != 0 ||
-            !layer->isVisible() || layer->opacity() != 1)
+            (!layer->isVisible() && !caveMask) || layer->opacity() != 1)
             return fail(QStringLiteral("Layers must be visible, opaque and have zero offset: ") + name);
         if (name == QStringLiteral("Objects")) {
             const auto *group = layer->asObjectGroup();
@@ -99,6 +107,19 @@ std::unique_ptr<LoadedLevel> loadLevel(const QString &path, QString &error)
                         return fail(QStringLiteral("Tile ID outside the tileset in ") + name);
                     if (name == QStringLiteral("Walls"))
                         data.walls[y * data.width + x] = !cell.isEmpty();
+                    if (caveArt && !cell.isEmpty()) {
+                        const auto *tile = cell.tile();
+                        const QString part = name == QStringLiteral("CaveRoof") ? QStringLiteral("roof") :
+                            name == QStringLiteral("CaveUpper") ? QStringLiteral("upper") : QStringLiteral("lower");
+                        const int anchor = part == QStringLiteral("roof") ? 96 : part == QStringLiteral("upper") ? 64 : 32;
+                        const auto sortY = tile->property(QStringLiteral("sortY"));
+                        if (cell.flags() || tile->offset() != QPoint() || tile->isAnimated() ||
+                            layer->effectiveTintColor() != QColor(Qt::white) ||
+                            tile->property(QStringLiteral("cavePart")).toString() != part ||
+                            sortY.metaType().id() != QMetaType::Int || sortY.toInt() != anchor)
+                            return fail(QStringLiteral("Cave art needs static tiles with the correct part and ground anchor."));
+                        caveSprites.append({tile->image().copy(tile->imageRect()), QPointF(x*32,y*32), qreal(y*32+anchor)});
+                    }
                     if ((name == QStringLiteral("Water") || name == QStringLiteral("Boardwalk")) && !cell.isEmpty()) {
                         const auto *tile = cell.tile();
                         const bool water = name == QStringLiteral("Water");
@@ -145,6 +166,34 @@ std::unique_ptr<LoadedLevel> loadLevel(const QString &path, QString &error)
     if (!layerNames.contains(QStringLiteral("Ground")) || !layerNames.contains(QStringLiteral("Walls")) ||
         !layerNames.contains(QStringLiteral("Objects")) || objects.size() != 3)
         return fail(QStringLiteral("Ground, Walls, Objects and one PlayerSpawn, Key, Exit are required."));
+    if (cave) {
+        const auto tileLayer = [&](const QString &name) -> const Tiled::TileLayer * {
+            for (auto *layer : map->layers())
+                if (layer->name() == name) return layer->asTileLayer();
+            return nullptr;
+        };
+        const auto *shape = tileLayer(QStringLiteral("CaveShape"));
+        const auto *roof = tileLayer(QStringLiteral("CaveRoof"));
+        const auto *upper = tileLayer(QStringLiteral("CaveUpper"));
+        const auto *lower = tileLayer(QStringLiteral("CaveLower"));
+        if (!shape || !roof || !upper || !lower)
+            return fail(QStringLiteral("Cave maps require CaveShape, CaveRoof, CaveUpper and CaveLower."));
+        const auto solid = [&](int x, int y) { return shape->contains(x,y) && !shape->cellAt(x,y).isEmpty(); };
+        for (int y=0; y<data.height; ++y) {
+            for (int x=0; x<data.width; ++x) {
+                const auto cell = shape->cellAt(x,y);
+                if (!cell.isEmpty() && (y<2 || cell.flags() ||
+                    cell.tile()->property(QStringLiteral("caveSolid")).metaType().id() != QMetaType::Bool ||
+                    !cell.tile()->property(QStringLiteral("caveSolid")).toBool()))
+                    return fail(QStringLiteral("CaveShape needs untransformed caveSolid markers and two empty top rows."));
+                if (data.walls[y*data.width+x] != solid(x,y) ||
+                    roof->cellAt(x,y).isEmpty() == solid(x,y+2) ||
+                    upper->cellAt(x,y).isEmpty() == (solid(x,y+1) && !solid(x,y+2)) ||
+                    lower->cellAt(x,y).isEmpty() == (solid(x,y) && !solid(x,y+1)))
+                    return fail(QStringLiteral("Stale cave output: run Map > AutoMap and save."));
+            }
+        }
+    }
     GameWorld world;
     world.reset(data);
     if (!hasTerrainClearance(data, GameWorld::footprintAt(data.spawn)) ||
@@ -200,6 +249,7 @@ std::unique_ptr<LoadedLevel> loadLevel(const QString &path, QString &error)
     result->map = std::move(map);
     result->data = std::move(data);
     result->props = std::move(props);
+    result->caveSprites = std::move(caveSprites);
     return result;
 }
 

@@ -30,7 +30,7 @@ int main(int argc, char **argv)
         return 2;
     }
     const QString map = parser.isSet(QStringLiteral("map")) ? parser.value(QStringLiteral("map"))
-        : QStringLiteral(":/onekeyout/assets/maps/first-room.tmx");
+        : QStringLiteral(":/onekeyout/assets/maps/cave-vault.tmx");
     OneKeyOut::GameWindow window;
     QString error;
     if (!window.load(map, error)) {

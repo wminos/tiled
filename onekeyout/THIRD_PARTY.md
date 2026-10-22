@@ -14,8 +14,14 @@ Widgets. The upstream editor and its export plugins are not linked into the game
 The dungeon tiles and actor sprites are original pixel art authored for this
 game using `tools/create-assets.py`. The water and boardwalk atlases are original
 art from `tools/create-terrain-art.py`, imported into native Tiled terrain sets
-through tiled-ai. No external game assets were imported. Both recipes refuse to
-overwrite existing art. See `TERRAIN.md` for the terrain authoring contract.
+through tiled-ai. The original cave atlas and Automapping rule maps are authored
+by `tools/create-cave-rules.py`. No external game assets were imported. All art
+recipes refuse to overwrite existing output. See `TERRAIN.md` and `AUTOMAPPING.md`.
+
+The development-only `onekeyout-automap` utility links the existing
+`src/tiled` editor library (GPL-2.0-or-later, see the repository's `LICENSE.GPL`).
+It uses Tiled's native Automapping implementation. Neither this tool
+nor the editor library is included in the game app package.
 The UI requests the system-installed Avenir Next font, with Qt's platform font
 fallback. No font files are distributed.
 

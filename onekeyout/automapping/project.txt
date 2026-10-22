@@ -1,0 +1,3 @@
+# Only cave maps own the generated wall layers. Other maps keep authored Walls.
+[cave-*.tmx]
+rules.txt
