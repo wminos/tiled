@@ -1,10 +1,12 @@
 #include "levelloader.h"
 #include "gameworld.h"
+#include "collision.h"
 #include "mapreader.h"
 #include "mapobject.h"
 #include "objectgroup.h"
 #include "tilelayer.h"
 #include "tileset.h"
+#include "tile.h"
 
 #include <QQueue>
 #include <QSet>
@@ -34,6 +36,7 @@ std::unique_ptr<LoadedLevel> loadLevel(const QString &path, QString &error)
     }
 
     LevelData data;
+    QVector<PropSprite> props;
     data.width = map->width();
     data.height = map->height();
     data.walls.fill(false, data.width * data.height);
@@ -46,7 +49,8 @@ std::unique_ptr<LoadedLevel> loadLevel(const QString &path, QString &error)
         const QString name = layer->name();
         if (layerNames.contains(name) ||
             (name != QStringLiteral("Ground") && name != QStringLiteral("Walls") &&
-             name != QStringLiteral("Objects") && name != QStringLiteral("Foreground")))
+             name != QStringLiteral("Objects") && name != QStringLiteral("Props") &&
+             name != QStringLiteral("Foreground")))
             return fail(QStringLiteral("Unknown or duplicate layer: ") + name);
         layerNames.insert(name);
         if (layer->offset() != QPointF() || layer->x() != 0 || layer->y() != 0 ||
@@ -92,6 +96,33 @@ std::unique_ptr<LoadedLevel> loadLevel(const QString &path, QString &error)
                         return fail(QStringLiteral("Tile ID outside the tileset in ") + name);
                     if (name == QStringLiteral("Walls"))
                         data.walls[y * data.width + x] = !cell.isEmpty();
+                    if (name == QStringLiteral("Props") && !cell.isEmpty()) {
+                        const auto *tile = cell.tile();
+                        if (cell.flags() != 0 || tile->offset() != QPoint() || tile->isAnimated() ||
+                            layer->effectiveTintColor() != QColor(Qt::white))
+                            return fail(QStringLiteral("Props need unflipped, static tiles without offsets or tint."));
+                        const QPointF origin(x * data.tileSize, y * data.tileSize);
+                        bool validSortY = true;
+                        const auto value = tile->property(QStringLiteral("sortY"));
+                        const qreal sortY = value.isValid() ? value.toDouble(&validSortY) : data.tileSize;
+                        if (!validSortY || !std::isfinite(sortY) || sortY < 0 || sortY > data.tileSize)
+                            return fail(QStringLiteral("Prop sortY must be a tile-local number from 0 to 32."));
+                        props.append({tile->image().copy(tile->imageRect()), origin, origin.y() + sortY});
+                        if (const auto *shapes = tile->objectGroup()) {
+                            if (shapes->offset() != QPointF() || shapes->x() != 0 || shapes->y() != 0)
+                                return fail(QStringLiteral("Prop collision groups must have zero offset."));
+                            for (const auto *shape : shapes->objects()) {
+                                const QRectF bounds(shape->position(), shape->size());
+                                if (shape->shape() != Tiled::MapObject::Rectangle || shape->rotation() != 0 ||
+                                    !shape->cell().isEmpty() || !std::isfinite(bounds.x()) ||
+                                    !std::isfinite(bounds.y()) || !std::isfinite(bounds.width()) ||
+                                    !std::isfinite(bounds.height()) || bounds.width() <= 0 || bounds.height() <= 0 ||
+                                    !QRectF(0, 0, data.tileSize, data.tileSize).contains(bounds))
+                                    return fail(QStringLiteral("Prop collision shapes must be unrotated rectangles inside the tile."));
+                                data.propColliders.append(bounds.translated(origin));
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -101,37 +132,59 @@ std::unique_ptr<LoadedLevel> loadLevel(const QString &path, QString &error)
         return fail(QStringLiteral("Ground, Walls, Objects and one PlayerSpawn, Key, Exit are required."));
     GameWorld world;
     world.reset(data);
-    if (!world.canOccupy(data.spawn) || !world.canOccupy(data.key.center()) ||
-        !world.canOccupy(data.exit.center()))
+    if (!hasTerrainClearance(data, GameWorld::footprintAt(data.spawn)) ||
+        !hasTerrainClearance(data, GameWorld::footprintAt(data.key.center())) ||
+        !hasTerrainClearance(data, GameWorld::footprintAt(data.exit.center())))
         return fail(QStringLiteral("Spawn, key and exit must have player-sized clearance."));
     if (data.key.intersects(data.exit) || world.playerBounds().intersects(data.key) ||
         world.playerBounds().intersects(data.exit))
         return fail(QStringLiteral("Spawn, key and exit must not overlap."));
 
-    // Cell-center reachability is the supported level contract (no sub-cell passages).
-    QSet<int> visited;
-    QQueue<QPoint> queue;
-    const QPoint start(int(data.spawn.x()) / 32, int(data.spawn.y()) / 32);
-    queue.enqueue(start);
-    visited.insert(start.y() * data.width + start.x());
-    const QPoint directions[]{{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
-    while (!queue.isEmpty()) {
-        const QPoint cell = queue.dequeue();
-        for (const QPoint direction : directions) {
-            const QPoint next = cell + direction;
-            const int index = next.y() * data.width + next.x();
-            if (!data.blocked(next.x(), next.y()) && !visited.contains(index)) {
-                visited.insert(index);
-                queue.enqueue(next);
+    // Validate the same footprint and swept paths used by movement, first with
+    // the gate closed, then open. Content still promises cell-center routes.
+    const auto reachable = [&](QPointF from, QPointF target, const QRectF &gate) {
+        const auto center = [&](QPoint cell) {
+            return QPointF((cell.x() + 0.5) * data.tileSize, (cell.y() + 0.5) * data.tileSize);
+        };
+        const auto cellAt = [&](QPointF point) {
+            return QPoint(int(point.x()) / data.tileSize, int(point.y()) / data.tileSize);
+        };
+        const auto clearPath = [&](QPointF a, QPointF b) {
+            const auto body = GameWorld::footprintAt(a);
+            return hasTerrainClearance(data, body) && !body.intersects(gate) &&
+                   slideMove(data, body, b - a, gate) == b - a;
+        };
+        const QPoint start = cellAt(from), goal = cellAt(target);
+        if (!clearPath(from, center(start)))
+            return false;
+        QSet<int> visited;
+        QQueue<QPoint> queue;
+        queue.enqueue(start);
+        visited.insert(start.y() * data.width + start.x());
+        const QPoint directions[]{{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+        while (!queue.isEmpty()) {
+            const QPoint cell = queue.dequeue();
+            if (cell == goal && clearPath(center(cell), target))
+                return true;
+            for (const QPoint direction : directions) {
+                const QPoint next = cell + direction;
+                const int index = next.y() * data.width + next.x();
+                if (!data.blocked(next.x(), next.y()) && !visited.contains(index) &&
+                    clearPath(center(cell), center(next))) {
+                    visited.insert(index);
+                    queue.enqueue(next);
+                }
             }
         }
-    }
-    for (const QPointF target : {data.key.center(), data.exit.center()})
-        if (!visited.contains(int(target.y()) / 32 * data.width + int(target.x()) / 32))
-            return fail(QStringLiteral("Key and exit must be reachable from PlayerSpawn."));
+        return false;
+    };
+    if (!reachable(data.spawn, data.key.center(), data.exit) ||
+        !reachable(data.key.center(), data.exit.center(), {}))
+        return fail(QStringLiteral("Need a clear route to the key with the gate closed, then to the exit."));
     auto result = std::make_unique<LoadedLevel>();
     result->map = std::move(map);
     result->data = std::move(data);
+    result->props = std::move(props);
     return result;
 }
 

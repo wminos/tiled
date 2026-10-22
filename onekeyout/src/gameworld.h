@@ -6,7 +6,9 @@ namespace OneKeyOut {
 
 class GameWorld {
 public:
-    static constexpr qreal PlayerHalfSize = 9;
+    // World position is the ground anchor, independent of the 32x32 sprite.
+    static constexpr qreal PlayerHalfWidth = 9;
+    static constexpr qreal PlayerHalfDepth = 5;
     static constexpr qreal Speed = 144;
     enum class State { Playing, Paused, Won };
 
@@ -16,6 +18,7 @@ public:
     void pause();
     void step(QPointF direction, double seconds);
     QRectF playerBounds() const;
+    static QRectF footprintAt(QPointF anchor);
     bool canOccupy(QPointF center) const;
 
     const LevelData &level() const { return m_level; }

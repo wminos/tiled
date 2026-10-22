@@ -12,6 +12,7 @@ struct LevelData {
     int height = 0;
     int tileSize = 32;
     QVector<bool> walls;
+    QVector<QRectF> propColliders;
     QPointF spawn;
     QRectF key;
     QRectF exit;

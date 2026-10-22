@@ -2,13 +2,21 @@
 
 #include "leveldata.h"
 #include "map.h"
+#include <QPixmap>
 #include <memory>
 
 namespace OneKeyOut {
 
+struct PropSprite {
+    QPixmap image;
+    QPointF topLeft;
+    qreal groundY = 0;
+};
+
 struct LoadedLevel {
     std::unique_ptr<Tiled::Map> map;
     LevelData data;
+    QVector<PropSprite> props;
 };
 
 // libtiled owns format decoding; this adapter validates the game's supported subset.

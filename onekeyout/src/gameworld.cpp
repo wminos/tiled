@@ -1,4 +1,5 @@
 #include "gameworld.h"
+#include "collision.h"
 
 #include <algorithm>
 #include <cmath>
@@ -40,22 +41,19 @@ void GameWorld::pause()
 
 QRectF GameWorld::playerBounds() const
 {
-    return {m_position.x() - PlayerHalfSize, m_position.y() - PlayerHalfSize,
-            PlayerHalfSize * 2, PlayerHalfSize * 2};
+    return footprintAt(m_position);
 }
 
-bool GameWorld::canOccupy(QPointF center) const
+QRectF GameWorld::footprintAt(QPointF anchor)
 {
-    constexpr double epsilon = 0.001;
-    const int left = int(std::floor((center.x() - PlayerHalfSize) / m_level.tileSize));
-    const int right = int(std::floor((center.x() + PlayerHalfSize - epsilon) / m_level.tileSize));
-    const int top = int(std::floor((center.y() - PlayerHalfSize) / m_level.tileSize));
-    const int bottom = int(std::floor((center.y() + PlayerHalfSize - epsilon) / m_level.tileSize));
-    for (int y = top; y <= bottom; ++y)
-        for (int x = left; x <= right; ++x)
-            if (m_level.blocked(x, y))
-                return false;
-    return true;
+    return {anchor.x() - PlayerHalfWidth, anchor.y() - PlayerHalfDepth,
+            PlayerHalfWidth * 2, PlayerHalfDepth * 2};
+}
+
+bool GameWorld::canOccupy(QPointF anchor) const
+{
+    const QRectF body = footprintAt(anchor);
+    return hasTerrainClearance(m_level, body) && (m_hasKey || !body.intersects(m_level.exit));
 }
 
 bool GameWorld::nearExit() const
@@ -81,15 +79,11 @@ void GameWorld::step(QPointF direction, double seconds)
 
     const QPointF before = m_position;
     const QPointF delta = direction * (Speed * seconds);
-    // Short substeps also protect callers outside the normal 60 Hz loop.
+    // Sweeps prevent solid tunneling; short substeps also sample pickup/exit triggers.
     const int steps = std::max(1, int(std::ceil(std::max(std::abs(delta.x()), std::abs(delta.y())) / 3)));
     for (int i = 0; i < steps; ++i) {
-        const QPointF xStep{m_position.x() + delta.x() / steps, m_position.y()};
-        if (canOccupy(xStep))
-            m_position = xStep;
-        const QPointF yStep{m_position.x(), m_position.y() + delta.y() / steps};
-        if (canOccupy(yStep))
-            m_position = yStep;
+        m_position += slideMove(m_level, playerBounds(), delta / steps,
+                                m_hasKey ? QRectF() : m_level.exit);
         if (!m_hasKey && playerBounds().intersects(m_level.key)) {
             m_hasKey = true;
             m_pickupAge = 0;

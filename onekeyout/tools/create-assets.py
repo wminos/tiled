@@ -145,17 +145,17 @@ def create():
     # Keep the outer boundary at exactly 24 columns.
     rows = [row if len(row) == 24 else row[:-1] + "." * (24 - len(row)) + "#" for row in rows]
     assert all(len(row) == 24 for row in rows)
-    ground, walls, foreground = [], [], []
+    ground, walls, props = [], [], []
     locations = {}
     for y, row in enumerate(rows):
         for x, char in enumerate(row):
             ground.append(1 + (x * 7 + y * 13) % 3)
             walls.append((5 if (x + y * 3) % 7 == 0 else 4) if char == "#" else 0)
-            foreground.append(0)
+            props.append(0)
             if char in "SKE":
                 locations[char] = (x, y)
     for x, y in [(2, 1), (5, 1), (9, 1), (13, 1), (17, 1), (21, 1), (2, 14), (21, 14)]:
-        foreground[y * 24 + x] = 7 if x % 2 == 0 else 8
+        props[y * 24 + x] = 7 if x % 2 == 0 else 8
     for x, y in [(11, 11), (11, 12), (11, 13), (19, 2), (19, 3), (19, 4)]:
         if not walls[y * 24 + x]:
             ground[y * 24 + x] = 6
@@ -171,8 +171,17 @@ def create():
     tmx += ' <properties><property name="title" value="THE LANTERN VAULT"/></properties>\n <tileset firstgid="1" source="../tilesets/dungeon.tsx"/>\n'
     tmx += layer(1, "Ground", ground) + layer(2, "Walls", walls)
     tmx += f' <objectgroup id="3" name="Objects">\n  <object id="1" name="Start" type="PlayerSpawn" x="{sx * 32 + 16}" y="{sy * 32 + 16}"><point/></object>\n  <object id="2" name="Golden key" type="Key" x="{kx * 32 + 6}" y="{ky * 32 + 6}" width="20" height="20"/>\n  <object id="3" name="Way out" type="Exit" x="{ex * 32 + 2}" y="{ey * 32 + 2}" width="28" height="28"/>\n </objectgroup>\n'
-    tmx += layer(4, "Foreground", foreground) + '</map>\n'
+    tmx += layer(4, "Props", props) + '</map>\n'
     tsx = '<?xml version="1.0" encoding="UTF-8"?>\n<tileset version="1.10" tiledversion="1.12.2" name="dungeon" tilewidth="32" tileheight="32" tilecount="8" columns="8">\n <image source="../images/dungeon.png" width="256" height="32"/>\n</tileset>\n'
+    tsx = tsx.replace('</tileset>', ''' <tile id="6">
+  <properties><property name="sortY" type="float" value="28"/></properties>
+  <objectgroup draworder="index"><object id="1" x="11" y="21" width="11" height="7"/></objectgroup>
+ </tile>
+ <tile id="7">
+  <properties><property name="sortY" type="float" value="29"/></properties>
+  <objectgroup draworder="index"><object id="1" x="12" y="24" width="10" height="5"/></objectgroup>
+ </tile>
+</tileset>''')
     fixture = tmx.replace('../tilesets/dungeon.tsx', '../../assets/tilesets/dungeon.tsx')
     outputs = {
         "assets/images/dungeon.png": tiles.png(),

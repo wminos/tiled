@@ -2,12 +2,12 @@
 #include "gameworld.h"
 #include "levelloader.h"
 #include "maprenderer.h"
-#include "tilelayer.h"
 
 #include <QGraphicsScene>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QRadialGradient>
+#include <algorithm>
 #include <cmath>
 
 namespace OneKeyOut {
@@ -110,7 +110,7 @@ void GameView::drawForeground(QPainter *p, const QRectF &rect)
     p->save();
     p->setClipRect(m_level->data.bounds());
     const double time = m_world.elapsed();
-    const QPointF exit = m_level->data.exit.center();
+    const QPointF exit(m_level->data.exit.center().x(), m_level->data.exit.bottom());
     const QPointF key = m_level->data.key.center();
     const QPointF player = m_world.position();
     p->setRenderHint(QPainter::Antialiasing, true);
@@ -121,27 +121,14 @@ void GameView::drawForeground(QPainter *p, const QRectF &rect)
     glow(p, player, 45, QColor(254, 218, 140, 24));
     p->setRenderHint(QPainter::Antialiasing, false);
 
-    auto sprite = [&](int index, QPointF center, qreal bob = 0) {
-        const QPoint origin(qRound(center.x()) - 16, qRound(center.y()) - 20 + qRound(bob));
-        p->drawPixmap(QRect(origin, QSize(32, 32)), m_actors, QRect(index * 32, 0, 32, 32));
-    };
-    sprite(m_world.hasKey() ? 7 : 6, exit, 4);
-    if (!m_world.hasKey()) {
-        p->setPen(Qt::NoPen);
-        p->setBrush(QColor(0, 0, 0, 65));
-        p->drawEllipse(QRectF(key.x() - 9, key.y() + 7, 18, 5));
-        sprite(5, key, std::sin(time * 3) * 2);
-    }
+    // Ground effects are behind every standing object, never interleaved with bodies.
     p->setPen(Qt::NoPen);
+    if (!m_world.hasKey()) {
+        p->setBrush(QColor(0, 0, 0, 65));
+        p->drawEllipse(QRectF(key.x() - 9, key.y() - 2, 18, 5));
+    }
     p->setBrush(QColor(0, 0, 0, 100));
-    p->drawEllipse(QRectF(player.x() - 10, player.y() + 7, 20, 6));
-    const int frame = m_world.moving() ? 1 + int(time * 9) % 2 : 0;
-    int playerFrame = frame;
-    if (m_world.facing().y() < -0.4)
-        playerFrame = m_world.moving() ? 4 : 3;
-    sprite(playerFrame, player);
-    drawLayer(p, QStringLiteral("Foreground"), rect);
-
+    p->drawEllipse(QRectF(player.x() - 10, player.y() - 3, 20, 6));
     p->setRenderHint(QPainter::Antialiasing, true);
     if (m_world.pickupAge() < 0.65) {
         const qreal progress = m_world.pickupAge() / 0.65;
@@ -149,7 +136,47 @@ void GameView::drawForeground(QPainter *p, const QRectF &rect)
         p->setPen(QPen(QColor(248, 208, 126, int(220 * (1 - progress))), 2));
         p->drawEllipse(key, 10 + progress * 42, 10 + progress * 42);
     }
+    p->setRenderHint(QPainter::Antialiasing, false);
 
+    // Pivots are authored in sprite pixels; bobbing never changes ground Y.
+    const auto sprite = [&](int index, QPointF ground, int pivotY, qreal bob = 0) {
+        const QPoint origin(qRound(ground.x()) - 16, qRound(ground.y()) - pivotY + qRound(bob));
+        p->drawPixmap(QRect(origin, QSize(32, 32)), m_actors, QRect(index * 32, 0, 32, 32));
+    };
+    const int frame = m_world.moving() ? 1 + int(time * 9) % 2 : 0;
+    int playerFrame = frame;
+    if (m_world.facing().y() < -0.4)
+        playerFrame = m_world.moving() ? 4 : 3;
+
+    enum Kind { Prop, Gate, Key, Player };
+    struct Item { qreal groundY; Kind kind; int index = 0; };
+    QVector<Item> items;
+    items.reserve(m_level->props.size() + 3);
+    for (int i = 0; i < m_level->props.size(); ++i)
+        items.append({m_level->props[i].groundY, Prop, i});
+    items.append({exit.y(), Gate});
+    if (!m_world.hasKey())
+        items.append({key.y(), Key});
+    items.append({player.y(), Player});
+    // Stable ties: authored props, gate, key, then player. No animation jitter.
+    std::stable_sort(items.begin(), items.end(), [](const Item &a, const Item &b) {
+        return a.groundY < b.groundY;
+    });
+    for (const auto &item : items) {
+        switch (item.kind) {
+        case Prop: {
+            const auto &prop = m_level->props[item.index];
+            p->drawPixmap(prop.topLeft, prop.image);
+            break;
+        }
+        case Gate: sprite(m_world.hasKey() ? 7 : 6, exit, 32); break;
+        case Key: sprite(5, key, 29, std::sin(time * 3) * 2); break;
+        case Player: sprite(playerFrame, player, 29); break;
+        }
+    }
+    drawLayer(p, QStringLiteral("Foreground"), rect);
+
+    p->setRenderHint(QPainter::Antialiasing, true);
     if (m_world.state() != GameWorld::State::Playing) {
         p->fillRect(sceneRect(), QColor(6, 15, 21, 185));
         const bool won = m_world.state() == GameWorld::State::Won;

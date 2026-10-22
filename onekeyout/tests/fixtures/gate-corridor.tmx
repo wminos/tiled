@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<map version="1.10" tiledversion="1.12.2" orientation="orthogonal" renderorder="right-down" width="7" height="3" tilewidth="32" tileheight="32" infinite="0">
+ <tileset firstgid="1" source="../../assets/tilesets/dungeon.tsx"/>
+ <layer id="1" name="Ground" width="7" height="3">
+  <data encoding="csv">
+1,1,1,1,1,1,1,
+1,1,1,1,1,1,1,
+1,1,1,1,1,1,1
+  </data>
+ </layer>
+ <layer id="2" name="Walls" width="7" height="3">
+  <data encoding="csv">
+4,4,4,4,4,4,4,
+4,0,0,0,0,0,4,
+4,4,4,4,4,4,4
+  </data>
+ </layer>
+ <objectgroup id="3" name="Objects">
+  <object id="1" type="PlayerSpawn" x="48" y="48"><point/></object>
+  <object id="2" type="Key" x="134" y="38" width="20" height="20"/>
+  <object id="3" type="Exit" x="66" y="34" width="28" height="28"/>
+ </objectgroup>
+</map>
