@@ -1,0 +1,5 @@
+/build/
+/dist/
+/PROMPT.md
+*.tiled-session
+__pycache__/

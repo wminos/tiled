@@ -1,0 +1,8 @@
+<RCC>
+  <qresource prefix="/onekeyout">
+    <file>assets/maps/first-room.tmx</file>
+    <file>assets/tilesets/dungeon.tsx</file>
+    <file>assets/images/dungeon.png</file>
+    <file>assets/images/actors.png</file>
+  </qresource>
+</RCC>

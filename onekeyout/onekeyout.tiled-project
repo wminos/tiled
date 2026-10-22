@@ -1,0 +1,13 @@
+{
+  "automappingRulesFile": "",
+  "commands": [
+    {"name": "Play One Key Out", "command": "%projectpath/run.sh", "arguments": "-- --map \"%mapfile\"", "workingDirectory": "%projectpath", "enabled": true, "saveBeforeExecute": true, "showOutput": true, "shortcut": "Ctrl+Return"}
+  ],
+  "extensionsPath": "extensions",
+  "folders": ["assets"],
+  "propertyTypes": [
+    {"id": 1, "name": "PlayerSpawn", "type": "class", "color": "#ffeacba1", "drawFill": true, "useAs": ["object"], "members": []},
+    {"id": 2, "name": "Key", "type": "class", "color": "#fff4cc79", "drawFill": true, "useAs": ["object"], "members": []},
+    {"id": 3, "name": "Exit", "type": "class", "color": "#ff69b49a", "drawFill": true, "useAs": ["object"], "members": []}
+  ]
+}
