@@ -57,7 +57,14 @@ brew install qbs qttools
 
 ## VS Code 코드 분석
 
-VS Code에서 Tiled 저장소 루트 또는 `onekeyout/`을 열고 clangd 확장을 사용합니다.
+VS Code에서 `onekeyout/onekeyout.code-workspace`를 열고 clangd 확장을 사용합니다.
+이 워크스페이스는 Tiled 저장소 전체를 표시하며 clangd 프로세스에 컴파일 데이터베이스
+위치를 명시합니다. 정의로 이동해서 저장소 밖의 Qt 헤더를 열어도 같은 빌드 정보를 사용합니다.
+
+```sh
+code onekeyout/onekeyout.code-workspace
+```
+
 처음 체크아웃했거나 `build/`를 지웠다면 `./onekeyout/run.sh --build-only`를 실행합니다.
 테스트 코드를 편집할 때는 `./onekeyout/run.sh --check`로 테스트의 Qt 생성 헤더도 준비합니다.
 `run.sh`는 매 빌드 후 Qbs의 실제 컴파일 옵션으로
@@ -66,9 +73,15 @@ VS Code에서 Tiled 저장소 루트 또는 `onekeyout/`을 열고 clangd 확장
 전처리 정의와 생성 헤더 경로를 같은 빌드 설정에서 가져옵니다.
 Qt 설치 경로를 편집기 설정에 직접 적을 필요는 없습니다.
 
-열려 있던 파일에 이전 진단이 남으면 명령 팔레트에서 **clangd: Restart language server**를
-한 번 실행합니다. 설정은 `onekeyout/` 아래 코드에 적용되며 원본 Tiled의 IDE 설정은
-수정하지 않습니다. 생성한 컴파일 데이터베이스는 `build/` 안에 두고 Git에서 제외합니다.
+`.clangd`만으로는 설정이 `onekeyout/` 아래에 한정되어 외부 Qt 헤더를 직접 열 때
+적용되지 않습니다. 따라서 외부 헤더 탐색에는 위 워크스페이스를 사용합니다.
+기존처럼 저장소 루트를 폴더로 열려면 Git에서 제외된 루트 `.vscode/settings.json`의
+`clangd.arguments`에 `--compile-commands-dir=${workspaceFolder}/onekeyout/build/debug`를
+추가하면 됩니다. 기존 다른 인자는 유지합니다.
+
+설정을 적용한 뒤 명령 팔레트에서 **clangd: Restart language server**를 한 번 실행합니다.
+공유 설정은 `onekeyout/`에 모으고, 생성한 컴파일 데이터베이스는 `build/` 안에 두고
+Git에서 제외합니다.
 
 참고: [Qbs clangdb 생성](https://doc.qt.io/qbs/generators.html#generating-clang-compilation-databases),
 [clangd 프로젝트 설정](https://clangd.llvm.org/config.html#compilationdatabase).
